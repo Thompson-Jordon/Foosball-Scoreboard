@@ -72,6 +72,7 @@ def add_point_yellow(ev=None):
 		yellow_score += 1
 	render()
 
+
 def add_point_black(ev=None):
 	global black_score
 	global yellow_score
