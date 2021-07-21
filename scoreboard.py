@@ -2,13 +2,21 @@
 import RPi.GPIO as GPIO
 import time
 
-yellow_score = 0
-black_score = 0
-yellow_games = 0
-black_games = 0
+
 press_count = 0
 start_time = None
-# time_passed = 0
+history = []
+
+
+class Team:
+    def __init__(self, color) -> None:
+        self.color = color
+        self.score = 0
+        self.games = 0
+
+
+team_one = Team("yellow")
+team_two = Team("black")
 
 YELLOW_INPUT = 5
 BLACK_INPUT = 6
@@ -72,29 +80,49 @@ def setup():
 
 
 def add_point_yellow(ev=None):
-    global yellow_score
-    global black_score
-    global yellow_games
-    if yellow_score >= 4:
-        yellow_score = 0
-        black_score = 0
-        yellow_games += 1
-    else:
-        yellow_score += 1
-    # render()
+    global team_one, team_two, history
+    if team_one.color == "yellow":
+
+        if team_one.score >= 4:
+            team_one.score = 0
+            team_two.score = 0
+            team_one.games += 1
+            history = []
+        else:
+            team_one.score += 1
+
+    if team_two.color == "yellow":
+
+        if team_two.score >= 4:
+            team_two.score = 0
+            team_one.score = 0
+            team_two.games += 1
+            history = []
+        else:
+            team_two.score += 1
 
 
 def add_point_black(ev=None):
-    global black_score
-    global yellow_score
-    global black_games
-    if black_score >= 4:
-        black_score = 0
-        yellow_score = 0
-        black_games += 1
-    else:
-        black_score += 1
-    # render()
+    global team_one, team_two, history
+    if team_one.color == "black":
+
+        if team_one.score >= 4:
+            team_one.score = 0
+            team_two.score = 0
+            team_one.games += 1
+            history = []
+        else:
+            team_one.score += 1
+
+    if team_two.color == "black":
+
+        if team_two.score >= 4:
+            team_two.score = 0
+            team_one.score = 0
+            team_two.games += 1
+            history = []
+        else:
+            team_two.score += 1
 
 
 def render_yellow_score(dat):
@@ -120,44 +148,53 @@ def render_black_score(dat):
 
 
 def render_games():
-    global yellow_games
-    global black_games
-    GPIO.output(YELLOW_GAME_1, yellow_games < 1)
-    GPIO.output(YELLOW_GAME_2, yellow_games < 2)
-    GPIO.output(YELLOW_GAME_3, yellow_games < 3)
-    GPIO.output(BLACK_GAME_1, black_games < 1)
-    GPIO.output(BLACK_GAME_2, black_games < 2)
-    GPIO.output(BLACK_GAME_3, black_games < 3)
+    global team_one
+    global team_two
+
+    if team_one.color == "yellow":
+
+        GPIO.output(YELLOW_GAME_1, team_one.games < 1)
+        GPIO.output(YELLOW_GAME_2, team_one.games < 2)
+        GPIO.output(YELLOW_GAME_3, team_one.games < 3)
+        GPIO.output(BLACK_GAME_1, team_two.games < 1)
+        GPIO.output(BLACK_GAME_2, team_two.games < 2)
+        GPIO.output(BLACK_GAME_3, team_two.games < 3)
+
+    if team_one.color == "black":
+
+        GPIO.output(YELLOW_GAME_1, team_two.games < 1)
+        GPIO.output(YELLOW_GAME_2, team_two.games < 2)
+        GPIO.output(YELLOW_GAME_3, team_two.games < 3)
+        GPIO.output(BLACK_GAME_1, team_one.games < 1)
+        GPIO.output(BLACK_GAME_2, team_one.games < 2)
+        GPIO.output(BLACK_GAME_3, team_one.games < 3)
 
 
 def count_clicks(ev=None):
     global press_count, start_time
     press_count += 1
     start_time = time.time()
-    # print(press_count)
 
 
 def reset():
-    global yellow_games, yellow_score, black_games, black_score
-    yellow_games = 0
-    yellow_score = 0
-    black_games = 0
-    black_score = 0
-    # render()
+    global team_one, team_two
+    team_one.games = 0
+    team_one.score = 0
+    team_two.games = 0
+    team_two.score = 0
 
 
 def switch_sides():
-    global yellow_games, yellow_score, black_games, black_score
-    yellow_games, black_games = black_games, yellow_games
-    yellow_score, black_score = black_score, yellow_score
-    # render()
+    global team_one, team_two, history
+    team_one.color = "black" if team_one.color == "yellow" else "yellow"
+    team_two.color = "black" if team_two.color == "yellow" else "yellow"
 
 
 def choices():
     global press_count
 
     # switcher = {1: reset, 2: switch_sides}
-    # switcher.get(press_count)
+    # switcher[press_count]()
     if press_count == 1:
         reset()
     if press_count == 2:
@@ -166,10 +203,9 @@ def choices():
 
 
 def render():
-    global yellow_score
-    global black_score
-    render_yellow_score(segCode[yellow_score])
-    render_black_score(segCode[black_score])
+    global team_one, team_two
+    render_yellow_score(segCode[team_one.score if team_one.color == "yellow" else team_two.score])
+    render_black_score(segCode[team_two.score if team_two.color == "black" else team_one.score])
     render_games()
 
 
@@ -185,7 +221,7 @@ def loop():
         RESET, GPIO.RISING, callback=count_clicks, bouncetime=200
     )  # wait for falling and set bouncetime to prevent the callback function from being called multiple times when the button is pressed
     while True:
-        if start_time is not None and time.time() - start_time > 0.3:
+        if start_time is not None and time.time() - start_time > 0.5:
             start_time = None
             choices()
         else:
@@ -195,8 +231,6 @@ def loop():
 
 def destroy():
     reset()
-    # GPIO.output(YELLOW_INPUT, GPIO.HIGH)  # led off
-    # GPIO.output(BLACK_INPUT, GPIO.HIGH)  # led off
     GPIO.output(BLACK_GAME_1, GPIO.HIGH)  # led off
     GPIO.output(BLACK_GAME_2, GPIO.HIGH)  # led off
     GPIO.output(BLACK_GAME_3, GPIO.HIGH)  # led off
