@@ -15,8 +15,16 @@ class Team:
         self.games = 0
 
 
+class Game:
+    def __init__(self, team_one_score, team_two_score) -> None:
+        self.team_one_score = team_one_score
+        self.team_two_score = team_two_score
+
+
 team_one = Team("yellow")
 team_two = Team("black")
+
+game_log = []
 
 YELLOW_INPUT = 5
 BLACK_INPUT = 6
@@ -84,21 +92,25 @@ def add_point_yellow(ev=None):
     if team_one.color == "yellow":
 
         if team_one.score >= 4:
+            history.append("one_game")
+            game_log.append(Game(team_one.score, team_two.score))
             team_one.score = 0
             team_two.score = 0
             team_one.games += 1
-            history = []
         else:
+            history.append("one_score")
             team_one.score += 1
 
     if team_two.color == "yellow":
 
         if team_two.score >= 4:
+            history.append("two_game")
+            game_log.append(Game(team_one.score, team_two.score))
             team_two.score = 0
             team_one.score = 0
             team_two.games += 1
-            history = []
         else:
+            history.append("two_score")
             team_two.score += 1
 
 
@@ -107,21 +119,25 @@ def add_point_black(ev=None):
     if team_one.color == "black":
 
         if team_one.score >= 4:
+            history.append("one_game")
+            game_log.append(Game(team_one.score, team_two.score))
             team_one.score = 0
             team_two.score = 0
             team_one.games += 1
-            history = []
         else:
+            history.append("one_score")
             team_one.score += 1
 
     if team_two.color == "black":
 
         if team_two.score >= 4:
+            history.append("two_game")
+            game_log.append(Game(team_one.score, team_two.score))
             team_two.score = 0
             team_one.score = 0
             team_two.games += 1
-            history = []
         else:
+            history.append("two_score")
             team_two.score += 1
 
 
@@ -177,11 +193,33 @@ def count_clicks(ev=None):
 
 
 def reset():
-    global team_one, team_two
+    global team_one, team_two, game_log, history
     team_one.games = 0
     team_one.score = 0
     team_two.games = 0
     team_two.score = 0
+    game_log = []
+    history = []
+
+
+def undo():
+    global team_one, team_two, game_log, history
+    if len(history) > 0:
+        action = history.pop()
+        if action is "one_score":
+            team_one.score = team_one.score - 1
+        if action is "one_game":
+            team_one.games = team_one.games - 1
+            game: Game = game_log.pop()
+            team_one.score = game.team_one_score
+            team_two.score = game.team_two_score
+        if action is "two_score":
+            team_two.score = team_two.score - 1
+        if action is "two_game":
+            team_two.games = team_two.games - 1
+            game: Game = game_log.pop()
+            team_one.score = game.team_one_score
+            team_two.score = game.team_two_score
 
 
 def switch_sides():
@@ -196,16 +234,22 @@ def choices():
     # switcher = {1: reset, 2: switch_sides}
     # switcher[press_count]()
     if press_count == 1:
-        reset()
+        undo()
     if press_count == 2:
         switch_sides()
+    if press_count == 3:
+        reset()
     press_count = 0
 
 
 def render():
     global team_one, team_two
-    render_yellow_score(segCode[team_one.score if team_one.color == "yellow" else team_two.score])
-    render_black_score(segCode[team_two.score if team_two.color == "black" else team_one.score])
+    render_yellow_score(
+        segCode[team_one.score if team_one.color == "yellow" else team_two.score]
+    )
+    render_black_score(
+        segCode[team_two.score if team_two.color == "black" else team_one.score]
+    )
     render_games()
 
 
@@ -221,7 +265,7 @@ def loop():
         RESET, GPIO.RISING, callback=count_clicks, bouncetime=200
     )  # wait for falling and set bouncetime to prevent the callback function from being called multiple times when the button is pressed
     while True:
-        if start_time is not None and time.time() - start_time > 0.3:
+        if start_time is not None and time.time() - start_time > 0.4:
             start_time = None
             choices()
         else:
