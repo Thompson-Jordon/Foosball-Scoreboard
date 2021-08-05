@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import RPi.GPIO as GPIO
 import time
+import numpy
 
 
 press_count = 0
 start_time = None
 history = []
+posession_one = None
 
 
 class Team:
@@ -46,7 +48,7 @@ BLACK_SDI = 22
 BLACK_RCLK = 23
 BLACK_SRCLK = 24
 
-segCode = [0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D]
+segCode = [0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F]
 
 
 def setup():
@@ -87,58 +89,71 @@ def setup():
     GPIO.output(BLACK_SRCLK, GPIO.LOW)
 
 
+def coin_flip(probability=0.5):
+    global posession_one
+    posession_one = numpy.random.binomial(1, probability)
+
+
 def add_point_yellow(ev=None):
     global team_one, team_two, history
     if team_one.color == "yellow":
 
-        if (team_one.score >= 4 and team_one.score - team_two.score >= 2) or team_one.score >= 7:
+        history.append("one_score")
+        team_one.score += 1
+
+        if (
+            team_one.score >= 5 and team_one.score - team_two.score >= 2
+        ) or team_one.score >= 8:
             history.append("one_game")
             game_log.append(Game(team_one.score, team_two.score))
             team_one.score = 0
             team_two.score = 0
             team_one.games += 1
-        else:
-            history.append("one_score")
-            team_one.score += 1
 
     if team_two.color == "yellow":
 
-        if (team_two.score >= 4 and team_one.score - team_two.score >= 2) or team_two.score >= 7:
+        history.append("two_score")
+        team_two.score += 1
+
+        if (
+            team_two.score >= 5 and team_two.score - team_one.score >= 2
+        ) or team_two.score >= 8:
             history.append("two_game")
             game_log.append(Game(team_one.score, team_two.score))
             team_two.score = 0
             team_one.score = 0
             team_two.games += 1
-        else:
-            history.append("two_score")
-            team_two.score += 1
 
 
 def add_point_black(ev=None):
     global team_one, team_two, history
     if team_one.color == "black":
 
-        if (team_one.score >= 4 and team_one.score - team_two.score >= 2) or team_one.score >= 7:
+        history.append("one_score")
+        team_one.score += 1
+
+        if (
+            team_one.score >= 5 and team_one.score - team_two.score >= 2
+        ) or team_one.score >= 8:
             history.append("one_game")
             game_log.append(Game(team_one.score, team_two.score))
             team_one.score = 0
             team_two.score = 0
             team_one.games += 1
-        else:
-            history.append("one_score")
-            team_one.score += 1
 
     if team_two.color == "black":
 
-        if (team_two.score >= 4 and team_one.score - team_two.score >= 2) or team_two.score >= 7:
+        history.append("two_score")
+        team_two.score += 1
+
+        if (
+            team_two.score >= 5 and team_two.score - team_one.score >= 2
+        ) or team_two.score >= 8:
             history.append("two_game")
             game_log.append(Game(team_one.score, team_two.score))
             team_two.score = 0
             team_one.score = 0
             team_two.games += 1
-        else:
-            history.append("two_score")
-            team_two.score += 1
 
 
 def render_yellow_score(dat):
@@ -238,9 +253,9 @@ def choices():
     # switcher = {1: reset, 2: switch_sides}
     # switcher[press_count]()
     if press_count == 1:
-        undo()
-    if press_count == 2:
         switch_sides()
+    if press_count == 2:
+        undo()
     if press_count == 3:
         reset()
     press_count = 0
@@ -259,8 +274,12 @@ def render():
 
 def loop():
     global start_time, press_count
-    GPIO.add_event_detect(YELLOW_INPUT, GPIO.FALLING, callback=add_point_yellow, bouncetime=2000)
-    GPIO.add_event_detect(BLACK_INPUT, GPIO.FALLING, callback=add_point_black, bouncetime=2000)
+    GPIO.add_event_detect(
+        YELLOW_INPUT, GPIO.FALLING, callback=add_point_yellow, bouncetime=2000
+    )
+    GPIO.add_event_detect(
+        BLACK_INPUT, GPIO.FALLING, callback=add_point_black, bouncetime=2000
+    )
     GPIO.add_event_detect(RESET, GPIO.RISING, callback=count_clicks, bouncetime=200)
     while True:
         if start_time is not None and time.time() - start_time > 0.4:
