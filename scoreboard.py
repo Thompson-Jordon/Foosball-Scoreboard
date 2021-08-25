@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 import RPi.GPIO as GPIO
 import time
-
-
-press_count = 0
-start_time = None
-history = []
+import numpy
 
 
 class Team:
@@ -21,6 +17,13 @@ class Game:
         self.team_two_score = team_two_score
 
 
+press_count = 0
+start_time = None
+history = []
+probability = .5
+num_flips = 15
+possession_yellow = True
+
 team_one = Team("yellow")
 team_two = Team("black")
 
@@ -32,11 +35,13 @@ RESET = 12
 
 YELLOW_GAME_1 = 13
 YELLOW_GAME_2 = 19
-YELLOW_GAME_3 = 26
+# YELLOW_GAME_3 = 26
+YELLOW_POSSESSION = 26
 
 BLACK_GAME_1 = 16
 BLACK_GAME_2 = 20
-BLACK_GAME_3 = 21
+# BLACK_GAME_3 = 21
+BLACK_POSSESSION = 21
 
 YELLOW_SDI = 17
 YELLOW_RCLK = 18
@@ -65,14 +70,18 @@ def setup():
     GPIO.output(YELLOW_GAME_1, GPIO.HIGH)
     GPIO.setup(YELLOW_GAME_2, GPIO.OUT)
     GPIO.output(YELLOW_GAME_2, GPIO.HIGH)
-    GPIO.setup(YELLOW_GAME_3, GPIO.OUT)
-    GPIO.output(YELLOW_GAME_3, GPIO.HIGH)
+    # GPIO.setup(YELLOW_GAME_3, GPIO.OUT)
+    # GPIO.output(YELLOW_GAME_3, GPIO.HIGH)
+    GPIO.setup(YELLOW_POSSESSION, GPIO.OUT)
+    GPIO.output(YELLOW_POSSESSION, GPIO.HIGH)
     GPIO.setup(BLACK_GAME_1, GPIO.OUT)
     GPIO.output(BLACK_GAME_1, GPIO.HIGH)
     GPIO.setup(BLACK_GAME_2, GPIO.OUT)
     GPIO.output(BLACK_GAME_2, GPIO.HIGH)
-    GPIO.setup(BLACK_GAME_3, GPIO.OUT)
-    GPIO.output(BLACK_GAME_3, GPIO.HIGH)
+    # GPIO.setup(BLACK_GAME_3, GPIO.OUT)
+    # GPIO.output(BLACK_GAME_3, GPIO.HIGH)
+    GPIO.setup(BLACK_POSSESSION, GPIO.OUT)
+    GPIO.output(BLACK_POSSESSION, GPIO.HIGH)
     GPIO.setup(YELLOW_SDI, GPIO.OUT)
     GPIO.setup(YELLOW_RCLK, GPIO.OUT)
     GPIO.setup(YELLOW_SRCLK, GPIO.OUT)
@@ -88,7 +97,8 @@ def setup():
 
 
 def add_point_yellow(ev=None):
-    global team_one, team_two, history
+    global team_one, team_two, history, possession_yellow
+    possession_yellow = False
     if team_one.color == "yellow":
         
         history.append("one_score")
@@ -116,7 +126,8 @@ def add_point_yellow(ev=None):
 
 
 def add_point_black(ev=None):
-    global team_one, team_two, history
+    global team_one, team_two, history, possession_yellow
+    possession_yellow = True
     if team_one.color == "black":
 
         history.append("one_score")
@@ -172,19 +183,19 @@ def render_games():
 
         GPIO.output(YELLOW_GAME_1, team_one.games < 1)
         GPIO.output(YELLOW_GAME_2, team_one.games < 2)
-        GPIO.output(YELLOW_GAME_3, team_one.games < 3)
+        # GPIO.output(YELLOW_GAME_3, team_one.games < 3)
         GPIO.output(BLACK_GAME_1, team_two.games < 1)
         GPIO.output(BLACK_GAME_2, team_two.games < 2)
-        GPIO.output(BLACK_GAME_3, team_two.games < 3)
+        # GPIO.output(BLACK_GAME_3, team_two.games < 3)
 
     if team_one.color == "black":
 
         GPIO.output(YELLOW_GAME_1, team_two.games < 1)
         GPIO.output(YELLOW_GAME_2, team_two.games < 2)
-        GPIO.output(YELLOW_GAME_3, team_two.games < 3)
+        # GPIO.output(YELLOW_GAME_3, team_two.games < 3)
         GPIO.output(BLACK_GAME_1, team_one.games < 1)
         GPIO.output(BLACK_GAME_2, team_one.games < 2)
-        GPIO.output(BLACK_GAME_3, team_one.games < 3)
+        # GPIO.output(BLACK_GAME_3, team_one.games < 3)
 
 
 def count_clicks(ev=None):
@@ -193,20 +204,43 @@ def count_clicks(ev=None):
     start_time = time.time()
 
 
+def render_possession():
+    global possession_yellow
+
+    GPIO.output(BLACK_POSSESSION, possession_yellow)
+    GPIO.output(YELLOW_POSSESSION, not possession_yellow)
+
+
+
 def reset():
-    global team_one, team_two, game_log, history
+    global team_one, team_two, game_log, history, num_flips, probability, possession_yellow
     team_one.games = 0
     team_one.score = 0
     team_two.games = 0
     team_two.score = 0
     game_log = []
     history = []
+    flip_results = numpy.arange(num_flips)
+    for f in range(num_flips):
+        flip_results[f] = coin_flip(probability)
+    possession_yellow = (numpy.count_nonzero(flip_results == 1) > numpy.count_nonzero(flip_results == 0))
 
 
 def undo():
-    global team_one, team_two, game_log, history
+    global team_one, team_two, game_log, history, possession_yellow
     if len(history) > 0:
         action = history.pop()
+        last_action = history[-1]
+        if last_action is 'one_score' or action is 'one_game':
+            if team_one.color is 'yellow':
+                possession_yellow = False
+            else:
+                possession_yellow = True
+        if last_action is 'two_score' or action is 'two_game':
+            if team_two.color is 'yellow':
+                possession_yellow = False
+            else:
+                possession_yellow = True
 
         if action is "one_score":
             team_one.score = team_one.score - 1
@@ -214,7 +248,7 @@ def undo():
         if action is "one_game":
             team_one.games = team_one.games - 1
             game: Game = game_log.pop()
-            team_one.score = game.team_one_score
+            team_one.score = game.team_one_score - 1
             team_two.score = game.team_two_score
 
         if action is "two_score":
@@ -224,13 +258,30 @@ def undo():
             team_two.games = team_two.games - 1
             game: Game = game_log.pop()
             team_one.score = game.team_one_score
-            team_two.score = game.team_two_score
+            team_two.score = game.team_two_score - 1
 
 
 def switch_sides():
-    global team_one, team_two, history
+    global team_one, team_two, history, possession_yellow
     team_one.color = "black" if team_one.color == "yellow" else "yellow"
     team_two.color = "black" if team_two.color == "yellow" else "yellow"
+    possession_yellow = not possession_yellow
+
+
+def coin_flip(probability):
+
+    GPIO.output(BLACK_POSSESSION, GPIO.HIGH)
+    GPIO.output(YELLOW_POSSESSION, GPIO.HIGH)
+
+    toss = numpy.random.binomial(1, probability)
+
+    GPIO.output(BLACK_POSSESSION, toss)
+    GPIO.output(YELLOW_POSSESSION, not toss)
+    time.sleep(.15)
+    GPIO.output(BLACK_POSSESSION, GPIO.HIGH)
+    GPIO.output(YELLOW_POSSESSION, GPIO.HIGH)
+
+    return toss
 
 
 def choices():
@@ -238,6 +289,7 @@ def choices():
 
     # switcher = {1: reset, 2: switch_sides}
     # switcher[press_count]()
+
     if press_count == 1:
         switch_sides()
     if press_count == 2:
@@ -256,6 +308,7 @@ def render():
         segCode[team_two.score if team_two.color == "black" else team_one.score]
     )
     render_games()
+    render_possession()
 
 
 def loop():
@@ -276,10 +329,12 @@ def destroy():
     reset()
     GPIO.output(BLACK_GAME_1, GPIO.HIGH)  # led off
     GPIO.output(BLACK_GAME_2, GPIO.HIGH)  # led off
-    GPIO.output(BLACK_GAME_3, GPIO.HIGH)  # led off
+    # GPIO.output(BLACK_GAME_3, GPIO.HIGH)  # led off
+    GPIO.output(BLACK_POSSESSION, GPIO.HIGH)  # led off
     GPIO.output(YELLOW_GAME_1, GPIO.HIGH)  # led off
     GPIO.output(YELLOW_GAME_2, GPIO.HIGH)  # led off
-    GPIO.output(YELLOW_GAME_3, GPIO.HIGH)  # led off
+    # GPIO.output(YELLOW_GAME_3, GPIO.HIGH)  # led off
+    GPIO.output(YELLOW_POSSESSION, GPIO.HIGH)  # led off
     GPIO.cleanup()
 
 
